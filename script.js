@@ -277,7 +277,6 @@ function advanceWave(){
   SFX.waveStart();
   showWaveBanner(currentWave);
   updateWaveHUD();
-  
   if(bgmGain&&soundEnabled){
     bgmGain.gain.setTargetAtTime(Math.min(0.08+currentWave*0.015,0.22),getAudioCtx().currentTime,0.5);
   }
