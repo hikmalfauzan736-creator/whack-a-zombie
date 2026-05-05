@@ -83,10 +83,8 @@ function stopBGM(){
   if(bgmGain){try{bgmGain.disconnect();}catch(e){} bgmGain=null;}
 }
 
-// MENU BGM — fully synchronous stop, no async teardown ──
 function startMenuBGM(){
   if(!soundEnabled||menuRunning) return;
-  // Always create a fresh AudioContext for menu to avoid stale state
   try{
     const ctx=getAudioCtx();
     if(ctx.state==='suspended') ctx.resume();
@@ -97,12 +95,10 @@ function startMenuBGM(){
     menuMasterGain.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime+2.0);
     menuMasterGain.connect(ctx.destination);
 
-    // Layer 1: deep sub bass drone
     const sub=ctx.createOscillator(); sub.type='sine'; sub.frequency.value=41;
     const subG=ctx.createGain(); subG.gain.value=0.55;
     sub.connect(subG); subG.connect(menuMasterGain); sub.start();
 
-    // Layer 2: mid sawtooth with LFO pitch wobble
     const mid=ctx.createOscillator(); mid.type='sawtooth'; mid.frequency.value=82;
     const midF=ctx.createBiquadFilter(); midF.type='lowpass'; midF.frequency.value=180;
     const midG=ctx.createGain(); midG.gain.value=0.28;
@@ -112,7 +108,6 @@ function startMenuBGM(){
     mid.connect(midF); midF.connect(midG); midG.connect(menuMasterGain);
     mid.start(); lfo.start();
 
-    // Layer 3: high triangle shimmer
     const hi=ctx.createOscillator(); hi.type='triangle'; hi.frequency.value=328;
     const hiF=ctx.createBiquadFilter(); hiF.type='bandpass'; hiF.frequency.value=380; hiF.Q.value=4;
     const hiG=ctx.createGain(); hiG.gain.value=0.045;
@@ -124,7 +119,6 @@ function startMenuBGM(){
 
     menuOscillators=[sub, mid, lfo, hi, hiLfo];
 
-    // Sporadic heartbeat thud
     function doThud(){
       if(!menuRunning||!menuMasterGain) return;
       try{
@@ -148,7 +142,6 @@ function stopMenuBGM(){
   if(!menuRunning) return;
   menuRunning=false;
   clearTimeout(menuThudTimer); menuThudTimer=null;
-  // Immediately kill all oscillators — no delay
   menuOscillators.forEach(n=>{ try{n.stop(0);}catch(e){} });
   menuOscillators=[];
   if(menuMasterGain){ try{menuMasterGain.disconnect();}catch(e){} menuMasterGain=null; }
@@ -210,7 +203,7 @@ const DIFF={
   insane:{spawnMin:260, spawnMax:640, showMin:650, showMax:1300,trapChance:.30,duration:30,penalty:8,xpMult:2.2,waveKills:15, puChance:.06},
 };
 
-// Power-up definitions
+// Power-up
 const POWERUPS={
   slow: {emoji:'❄️', label:'SLOW',    desc:'⏱ Zombie Melambat!',   color:'slow',   duration:6000},
   bomb: {emoji:'💥', label:'BOMB',    desc:'💥 Semua Zombie Meledak!', color:'bomb', duration:0},
@@ -226,11 +219,11 @@ let spawnTimer=null,countdownTimer=null;
 
 // Wave state
 let currentWave=1,waveKillCount=0,waveKillTarget=10;
-let waveSpeedMult=1.0; // spawn speed multiplier per wave
+let waveSpeedMult=1.0;
 
 // Live multiplier 
-let liveMult=1; // 1,2,3,5,10
-const MULT_THRESHOLDS=[1,3,5,8,10]; // combo thresholds → mult levels
+let liveMult=1;
+const MULT_THRESHOLDS=[1,3,5,8,10];
 const MULT_VALUES=[1,2,3,5,10];
 function getMultFromCombo(c){
   let m=1;
@@ -245,7 +238,7 @@ function getZombieSize(m){
 }
 
 //  Power-up state 
-let activePowerups={slow:null,shield:null}; // null or {expires:timestamp, timerId}
+let activePowerups={slow:null,shield:null};
 let puCooldown=false;
 
 // GRID BUILD
@@ -280,12 +273,11 @@ function advanceWave(){
   currentWave++;
   waveKillCount=0;
   waveKillTarget=Math.floor(cfg.waveKills*Math.pow(1.2,currentWave-1));
-  // Each wave speeds up spawn by 12%
   waveSpeedMult=Math.max(0.3,1.0-((currentWave-1)*0.12));
   SFX.waveStart();
   showWaveBanner(currentWave);
   updateWaveHUD();
-  // BGM gets more intense
+  
   if(bgmGain&&soundEnabled){
     bgmGain.gain.setTargetAtTime(Math.min(0.08+currentWave*0.015,0.22),getAudioCtx().currentTime,0.5);
   }
@@ -320,12 +312,10 @@ function activatePowerup(type){
   flashOverlay(type);
 
   if(type==='slow'){
-    // Clear existing slow
     if(activePowerups.slow){clearTimeout(activePowerups.slow.timerId);}
     activePowerups.slow={expires:Date.now()+pu.duration,timerId:setTimeout(()=>{activePowerups.slow=null;updatePuBar();},pu.duration)};
     updatePuBar();
   } else if(type==='bomb'){
-    // Kill all visible zombies
     let bonusKills=0;
     for(let i=0;i<HOLES;i++){
       if(holeStates[i]==='zombie'){
@@ -335,7 +325,6 @@ function activatePowerup(type){
         setTimeout(()=>el.classList.remove('whacked'),240);
         holeStates[i]=null;bonusKills++;
       } else if(holeStates[i]==='trap'){
-        // Also clears traps
         clearTimeout(holeTimers[i]);holeTimers[i]=null;
         const el=document.getElementById(`char${i}`);el.classList.remove('up');holeStates[i]=null;
       }
@@ -372,7 +361,6 @@ function updatePuBar(){
   }
 }
 
-// Refresh timers every second
 let puBarInterval=null;
 function startPuBarRefresh(){puBarInterval=setInterval(()=>{if(gameActive)updatePuBar();},500);}
 function stopPuBarRefresh(){clearInterval(puBarInterval);puBarInterval=null;}
@@ -395,9 +383,7 @@ function showChar(idx,type){
   const el=document.getElementById(`char${idx}`);
   el.classList.remove('up','whacked');void el.offsetWidth;
   requestAnimationFrame(()=>el.classList.add('up'));
-  // Slow powerup: extend show time
   const slowMult=activePowerups.slow?2.0:1.0;
-  // Also scale by wave (faster hide = harder)
   const showDur=rand(cfg.showMin,cfg.showMax)*slowMult*waveSpeedMult;
   holeTimers[idx]=setTimeout(()=>hideChar(idx,false),showDur);
 }
@@ -413,10 +399,8 @@ function spawnNext(){
   const empty=[];for(let i=0;i<HOLES;i++)if(!holeStates[i])empty.push(i);
   if(empty.length){
     const idx=empty[Math.floor(Math.random()*empty.length)];
-    // Determine type: powerup, trap, or zombie
     let type='zombie';
     const r=Math.random();
-    // Powerup chance (lower when slow/shield active)
     const puChance=(!puCooldown&&!activePowerups.slow&&!activePowerups.shield)?cfg.puChance:0;
     if(r<puChance){
       const puTypes=['slow','bomb','shield'];
@@ -427,9 +411,7 @@ function spawnNext(){
     }
     showChar(idx,type);
   }
-  // Spawn faster each wave
   const spawnDelay=rand(cfg.spawnMin,cfg.spawnMax)*waveSpeedMult;
-  // Also spawn multiple at higher waves
   const extraSpawns=Math.floor((currentWave-1)/2);
   spawnTimer=setTimeout(()=>{
     spawnNext();
@@ -460,7 +442,6 @@ function onHoleClick(idx){
     combo=Math.min(combo+1,12);maxCombo=Math.max(maxCombo,combo);
     liveMult=getMultFromCombo(combo);
 
-    // Live multiplier escalation notification
     if(liveMult>prevMult){
       SFX.multUp(liveMult);
       showNotif(`⚡ x${liveMult} MULTIPLIER!`);
@@ -473,7 +454,6 @@ function onHoleClick(idx){
     SFX.whack();
     onWaveKill();
 
-    // Refresh zombie size in remaining holes based on new multiplier
     for(let i=0;i<HOLES;i++){
       if(holeStates[i]==='zombie'){
         const ce=document.querySelector(`#char${i} .char-emoji`);
@@ -482,7 +462,6 @@ function onHoleClick(idx){
     }
   } else if(type==='trap'){
     if(activePowerups.shield){
-      // Shield absorbs trap!
       showPop(hole,'🛡 BLOCKED!','powerup');
       SFX.pop();
     } else {
